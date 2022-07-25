@@ -5,9 +5,6 @@
 const subtle = require("crypto").webcrypto;
 
 import {
-    /* The following functions are all of the cryptographic
-    primatives that you should need for this assignment.
-    See lib.js for details on usage. */
     byteArrayToString,
     genRandomSalt,
     HKDF, // async
@@ -29,12 +26,10 @@ export default class MessengerClient {
       // verify the authenticity and integrity of certificates
       // of other users (see handout and receiveCertificate)
 
-      // you can store data as needed in these objects.
-      // Feel free to modify their structure as you see fit.
+
       this.caPublicKey = certAuthorityPublicKey;
       this.govPublicKey = govPublicKey;
       this.conns = {}; // data for each active connection
-      //this.certs = {}; // certificates of other users
       this.startKeys = {};
       this.myPrivateKey = 0;
       this.myPublicKey = 0;
@@ -62,16 +57,12 @@ export default class MessengerClient {
    * Return Type: certificate object/dictionary
    */
   async generateCertificate(username) {
-    //console.log("gen cert");
-    //let salt1 = genRandomSalt();
     let keyPair = await generateEG();
     let publicKey = keyPair.pub;
-    //console.log(keyPair);
     let privateKey = keyPair.sec;
     this.myPrivateKey = privateKey;
     this.myPublicKey = publicKey;
     const certificate = {username:username, publicKey: publicKey};// add keys
-    //console.log(certificate);
     return certificate;
   }
 
@@ -81,7 +72,6 @@ export default class MessengerClient {
    * for a new conversation
    */
   async newConnectionData(theirPublicKey) {
-    //console.log("generate new connection data");
     let data = {}
     data.iSentLastMessage = false;
     data.theirCurrentPublicKey = theirPublicKey;
@@ -98,55 +88,37 @@ export default class MessengerClient {
 
   /* derive a new root key from a received public key and our old root key*/
   async deriveNewRootKey(oldRootKey, receivedPublicKey) {
-    //console.log("derive new root key");
     let newEGKeyPair = await generateEG();
     let myNewPrivateKey = newEGKeyPair.sec;
     let myNewPublicKey = newEGKeyPair.pub;
     let newSharedSecret = await computeDH(myNewPrivateKey, receivedPublicKey);
-    //console.log(newSharedSecret);
-    //console.log(oldRootKey);
     let twoNewKeys = await HKDF(oldRootKey, newSharedSecret, "arbitrary_and_fixed");
-    //console.log('twokey')
-    //console.log(twoNewKeys);
     let newRootKey = twoNewKeys[0];
     let newSendingChainKey = twoNewKeys[1];
-    //console.log('firstkey');
-    //console.log(newRootKey);
-    //console.log('secodkey');
-    //console.log(newSendingChainKey);
-    //console.log(newSendingChainKey);
     let ret =  {newRootKey: newRootKey, newSendingChainKey: newSendingChainKey,
             myNewPublicKey: myNewPublicKey, myNewPrivateKey: myNewPrivateKey};
-    //console.log(ret);
     return ret;
   }
 
   async deriveNewRootKeyWithOldPrivateKey(oldRootKey, receivedPublicKey, myPrivateKey) {
     //console.log("derive new root key with old private key");
     let newSharedSecret = await computeDH(myPrivateKey, receivedPublicKey);
-    //console.log(newSharedSecret);
-    //console.log(oldRootKey);
+
     let twoNewKeys = await HKDF(oldRootKey, newSharedSecret, "arbitrary_and_fixed");
-    //console.log('twokey')
-    //console.log(twoNewKeys);
+
     let newRootKey = twoNewKeys[0];
     let newSendingChainKey = twoNewKeys[1];
-    //console.log('firstkey');
-    //console.log(newRootKey);
-    //console.log('secodkey');
-    //console.log(newSendingChainKey);
-    //console.log(newSendingChainKey);
+
     let ret =  {newRootKey: newRootKey, newSendingChainKey: newSendingChainKey};
-    //console.log(ret);
     return ret;
   }
 
   /* derive a new chain key and message key from an old message key */
   async deriveNewMessageKey(oldMessageKey) {
-    //console.log('derive message key');
+
     let constant1 = 'Rayan cant code';
     let constant2 = 'robbie can code';
-    //console.log(oldMessageKey);
+
     let newChainKey = await HMACtoHMACKey(oldMessageKey, constant1);
     let newMessageKey = await HMACtoAESKey(oldMessageKey, constant2);
     let govMessageKeyBytes = await HMACtoAESKey(oldMessageKey, constant2, true);
@@ -164,27 +136,16 @@ export default class MessengerClient {
    * Return Type: void
    */
   async receiveCertificate(certificate, signature) {
-    //console.log("receive cert");
-    //do verification
     const certificateAsStr = JSON.stringify(certificate);
     const certificateAsArray = this.encoder.encode((certificateAsStr));
     let verification = await verifyWithECDSA(this.caPublicKey, certificateAsArray, signature);
-    //console.log('aqui');
-    //this.certs[signature] = certificate;
-    //console.log(certificate);
     this.startKeys[certificate.username] = certificate.publicKey;
     this.conns[certificate.username] = await this.newConnectionData(certificate.publicKey);
-    //console.log(this.conns[certificate.username]);
-    //console.log(this.startKeys);
+
   }
-/*
-  async printKey(key) {
-    console.log(subtle.exportKey('raw', key));
-  }
-  */
+
 
   async encryptForGovernment(sessionKeyBytes) {
-    //console.log('encrypting for gov');
     let ivgov = genRandomSalt();
     let egKeys = await generateEG();
     let sharedSecret = await computeDH(egKeys.sec, this.govPublicKey);
@@ -205,9 +166,7 @@ export default class MessengerClient {
    * Return Type: Tuple of [dictionary, string]
    */
   async sendMessage(name, plaintext) {
-    //console.log('sendmessage');
     let oldRootKey = this.conns[name].rootKey;
-    //console.log(oldRootKey);
     let curData = this.conns[name];
     if (! curData.iSentLastMessage) {
       curData.iSentLastMessage = true;
@@ -226,7 +185,6 @@ export default class MessengerClient {
     curData.currentSendingKey = newChainKey;
     let ivRecipient = genRandomSalt();
     let govData = await this.encryptForGovernment(govMessageKeyBytes);
-    //console.log(govData);
 
     const header = {senderPublicKey: curData.myCurrentPublicKey, receiver_iv:ivRecipient,
                     vGov: govData[0], cGov:govData[1] , ivGov:govData[2]};
@@ -246,7 +204,6 @@ export default class MessengerClient {
    * Return Type: string
    */
   async receiveMessage(name, [header, ciphertext]) {
-    //console.log("receive message");
     let headerAsBytes = await this.kvsAsBytes(header);
     let curData = this.conns[name];
     if (curData.iSentLastMessage || ! curData.initialized) {
@@ -255,7 +212,6 @@ export default class MessengerClient {
       curData.theirCurrentPublicKey = header.senderPublicKey;
       let data = await this.deriveNewRootKeyWithOldPrivateKey(curData.rootKey, curData.theirCurrentPublicKey, curData.myCurrentPrivateKey);
       curData.numRootKeysComputed += 1;
-      //let ret =  {newRootKey: newRootKey, newSendingChainKey: newSendingChainKey,
       curData.currentReceivingKey = data.newSendingChainKey;
       curData.rootKey = data.newRootKey;
     }
@@ -265,7 +221,7 @@ export default class MessengerClient {
     curData.currentReceivingKey = newChainKey;
     let plaintextAsBytes = await decryptWithGCM(newMessageKey, ciphertext, header.receiver_iv, headerAsBytes);
     let plaintextAsStr = byteArrayToString(plaintextAsBytes);
-    //console.log(plaintextAsStr);
+
     return plaintextAsStr;
   }
 };
